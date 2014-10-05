@@ -54,7 +54,7 @@ static void getword(char *word, char *line, char stop) {
     while((line[y++] = line[x++]));
 }
 
-static int getline(char *s, int n, FILE *f) {
+static int getline_x(char *s, int n, FILE *f) {
     register int i=0;
 
     while(1) {
@@ -261,7 +261,7 @@ int main(int argc, char *argv[]) {
     strcpy(user,argv[2]);
 
     found = 0;
-    while(!(getline(line,MAX_STRING_LEN,f))) {
+    while(!(getline_x(line,MAX_STRING_LEN,f))) {
         if(found || (line[0] == '#') || (!line[0])) {
             putline(tfp,line);
             continue;
