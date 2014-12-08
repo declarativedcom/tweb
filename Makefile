@@ -1,7 +1,6 @@
 # Generated automatically from Makefile.in by configure.
-# Makefile.in for thttpd
+# Makefile.in for tweb
 #
-# Copyright © 1995,1998 by Jef Poskanzer <jef@acme.com>.
 # (c) 2014  HM
 # All rights reserved.
 #
@@ -13,7 +12,7 @@
 # 2. Redistributions in binary form must reproduce the above copyright
 #    notice, this list of conditions and the following disclaimer in the
 #    documentation and/or other materials provided with the distribution.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
 # ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -49,7 +48,7 @@ CGIBINDIR =	$(WEBDIR)/cgi-bin
 # You shouldn't need to edit anything below here.
 
 CC =		gcc
-#CCOPT =		-O2 
+#CCOPT =		-O2
 CCOPT =		-O0 -g
 DEFS =		 -DHAVE__PROGNAME=1 -DHAVE_FCNTL_H=1 -DHAVE_GRP_H=1 -DHAVE_MEMORY_H=1 -DHAVE_PATHS_H=1 -DHAVE_POLL_H=1 -DHAVE_SYS_POLL_H=1 -DTIME_WITH_SYS_TIME=1 -DHAVE_DIRENT_H=1 -DHAVE_LIBCRYPT=1 -DHAVE_STRERROR=1 -DHAVE_WAITPID=1 -DHAVE_VSNPRINTF=1 -DHAVE_DAEMON=1 -DHAVE_SETSID=1 -DHAVE_GETADDRINFO=1 -DHAVE_GETNAMEINFO=1 -DHAVE_GAI_STRERROR=1 -DHAVE_SIGSET=1 -DHAVE_ATOLL=1 -DHAVE_UNISTD_H=1 -DHAVE_GETPAGESIZE=1 -DHAVE_MMAP=1 -DHAVE_SELECT=1 -DHAVE_POLL=1 -DHAVE_TM_GMTOFF=1 -DHAVE_INT64T=1 -DHAVE_SOCKLENT=1 
 INCLS =		-I. -I./libmd5 -I./liblockout
@@ -67,11 +66,11 @@ INSTALL =	/usr/bin/install -c
 	@rm -f $@
 	$(CC) $(CFLAGS) -c $*.c
 
-SRC =		thttpd.c libhttpd.c fdwatch.c mmc.c timers.c match.c tdate_parse.c shock.c
+SRC =		tweb.c libhttpd.c fdwatch.c mmc.c timers.c match.c tdate_parse.c shock.c
 
 OBJ =		$(SRC:.c=.o) 
 
-ALL =		thttpd
+ALL =		tweb
 
 GENHDR =	mime_encodings.h mime_types.h
 
@@ -82,7 +81,7 @@ SUBDIRS =	cgi-src extras
 all:		this subdirs
 this:		$(ALL)
 
-thttpd: $(OBJ) 
+tweb: $(OBJ)
 	@rm -f $@
 	echo $(CROSS_COMPILE)
 	cd libmd5; pwd; make; cd ..
@@ -121,11 +120,11 @@ install:	installthis install-man installsubdirs
 
 installthis:
 	-mkdir -p $(DESTDIR)$(BINDIR)
-	$(INSTALL) -m 555 -o bin -g bin thttpd $(DESTDIR)$(BINDIR)
+	$(INSTALL) -m 555 -o bin -g bin tweb $(DESTDIR)$(BINDIR)
 
 install-man:
 	-mkdir -p $(DESTDIR)$(MANDIR)/man8
-	$(INSTALL) -m 444 -o bin -g bin thttpd.8 $(DESTDIR)$(MANDIR)/man8
+	$(INSTALL) -m 444 -o bin -g bin tweb.8 $(DESTDIR)$(MANDIR)/man8
 
 installsubdirs:
 	for i in $(SUBDIRS) ; do ( \
@@ -166,7 +165,7 @@ tags:
 	ctags -wtd *.c *.h
 
 tar:
-	@name=`sed -n -e '/SERVER_SOFTWARE/!d' -e 's,.*thttpd/,thttpd-,' -e 's, .*,,p' version.h` ; \
+	@name=`sed -n -e '/SERVER_SOFTWARE/!d' -e 's,.*tweb/,tweb-,' -e 's, .*,,p' version.h` ; \
 	  rm -rf $$name ; \
 	  mkdir $$name ; \
 	  tar cf - `cat FILES` | ( cd $$name ; tar xfBp - ) ; \
@@ -176,7 +175,7 @@ tar:
 	  rm -rf $$name ; \
 	  gzip $$name.tar
 
-thttpd.o:	config.h version.h libhttpd.h fdwatch.h mmc.h timers.h match.h
+tweb.o:	config.h version.h libhttpd.h fdwatch.h mmc.h timers.h match.h
 libhttpd.o:	config.h version.h libhttpd.h mime_encodings.h mime_types.h \
 		mmc.h timers.h match.h tdate_parse.h
 fdwatch.o:	fdwatch.h

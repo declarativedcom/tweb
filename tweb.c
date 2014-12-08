@@ -1,6 +1,6 @@
-/* thttpd.c - tiny/turbo/throttling HTTP server
+/* tweb.c
 **
-** Copyright © 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -137,7 +137,7 @@ static int httpd_conn_count;
 #define CNST_LINGERING 4
 
 
-static httpd_server* hs = (httpd_server*) 0;
+static httpd_server* hs = NULL;
 int terminate = 0;
 time_t start_time, stats_time;
 long stats_connections;
@@ -660,8 +660,9 @@ main( int argc, char** argv )
 	port, cgi_pattern, cgi_limit, charset, p3p, max_age, cwd, no_log, logfp,
 	no_symlink_check, do_vhost, do_global_passwd, url_pattern,
 	local_pattern, no_empty_referers );
-    if ( hs == (httpd_server*) 0 )
+    if ( hs == (httpd_server*) 0 ) {
 	exit( 1 );
+    }
 
     /* Set up the occasional timer. */
     if ( tmr_create( (struct timeval*) 0, occasional, JunkClientData, OCCASIONAL_TIME * 1000L, 1 ) == (Timer*) 0 )
@@ -727,9 +728,7 @@ main( int argc, char** argv )
 	    }
 	/* Check for unnecessary security exposure. */
 	if ( ! do_chroot )
-	    syslog(
-		LOG_WARNING,
-		"started as root without requesting chroot(), warning only" );
+	    syslog(LOG_WARNING, "started as root without requesting chroot(), warning only" );
 	}
 
     /* Initialize our connections table. */
@@ -905,7 +904,7 @@ parse_args( int argc, char** argv )
 	{
 	if ( strcmp( argv[argn], "-V" ) == 0 )
 	    {
-	    (void) printf( "%s\n", SERVER_SOFTWARE );
+	    printf( SERVER_SOFTWARE " " SERVER_SW_BUILD "\n" );
 	    exit( 0 );
 	    }
 	else if ( strcmp( argv[argn], "-C" ) == 0 && argn + 1 < argc )
@@ -1022,10 +1021,8 @@ parse_args( int argc, char** argv )
 static void
 usage( void )
     {
-    (void) fprintf( stderr,
-"usage:  %s [-C configfile] [-p port] [-d dir] [-r|-nor] [-dd data_dir] [-s|-nos] [-v|-nov] [-g|-nog] [-u user] [-c cgipat] [-t throttles] [-h host] [-l logfile] [-i pidfile] [-T charset] [-P P3P] [-M maxage] [-V] [-D]\n",
-	argv0 );
-    exit( 1 );
+    printf("usage:  %s [-C configfile] [-p port] [-d dir] [-r|-nor] [-dd data_dir] [-s|-nos] [-v|-nov] [-g|-nog] [-u user] [-c cgipat] [-t throttles] [-h host] [-l logfile] [-i pidfile] [-T charset] [-P P3P] [-M maxage] [-V] [-D]\n", argv0 );
+    exit( 0 );
     }
 
 
@@ -1220,7 +1217,7 @@ read_config( char* filename )
 	    }
 	}
 
-    (void) fclose( fp );
+    fclose( fp );
     }
 
 
@@ -1324,8 +1321,8 @@ lookup_hostname( httpd_sockaddr* sa4P, size_t sa4_len, int* gotv4P, httpd_sockad
 		(unsigned long) aiv6->ai_addrlen );
 	    exit( 1 );
 	    }
-	(void) memset( sa6P, 0, sa6_len );
-	(void) memmove( sa6P, aiv6->ai_addr, aiv6->ai_addrlen );
+	memset( sa6P, 0, sa6_len );
+	memmove( sa6P, aiv6->ai_addr, aiv6->ai_addrlen );
 	*gotv6P = 1;
 	}
 
@@ -1341,8 +1338,8 @@ lookup_hostname( httpd_sockaddr* sa4P, size_t sa4_len, int* gotv4P, httpd_sockad
 		(unsigned long) aiv4->ai_addrlen );
 	    exit( 1 );
 	    }
-	(void) memset( sa4P, 0, sa4_len );
-	(void) memmove( sa4P, aiv4->ai_addr, aiv4->ai_addrlen );
+	memset( sa4P, 0, sa4_len );
+	memmove( sa4P, aiv4->ai_addr, aiv4->ai_addrlen );
 	*gotv4P = 1;
 	}
 
@@ -1356,10 +1353,10 @@ lookup_hostname( httpd_sockaddr* sa4P, size_t sa4_len, int* gotv4P, httpd_sockad
 
     (void) memset( sa4P, 0, sa4_len );
     sa4P->sa.sa_family = AF_INET;
-    if ( hostname == (char*) 0 )
+    if ( hostname == (char*) 0 ) {
 	sa4P->sa_in.sin_addr.s_addr = htonl( INADDR_ANY );
-    else
-	{
+    }
+    else {
 	sa4P->sa_in.sin_addr.s_addr = inet_addr( hostname );
 	if ( (int) sa4P->sa_in.sin_addr.s_addr == -1 )
 	    {
@@ -1418,7 +1415,7 @@ read_throttlefile( char* throttlefile )
 	exit( 1 );
 	}
 
-    (void) gettimeofday( &tv, (struct timezone*) 0 );
+    gettimeofday( &tv, (struct timezone*) 0 );
 
     while ( fgets( buf, sizeof(buf), fp ) != (char*) 0 )
 	{
@@ -1492,7 +1489,7 @@ read_throttlefile( char* throttlefile )
 
 	++numthrottles;
 	}
-    (void) fclose( fp );
+    fclose( fp );
     }
 
 
@@ -1502,12 +1499,12 @@ shut_down( void )
     int cnum;
     struct timeval tv;
 
-    (void) gettimeofday( &tv, (struct timezone*) 0 );
+    gettimeofday( &tv, (struct timezone*) 0 );
     logstats( &tv );
     for ( cnum = 0; cnum < max_connects; ++cnum )
 	{
 	if ( connects[cnum].conn_state != CNST_FREE )
-	    httpd_close_conn( connects[cnum].hc, &tv );
+	    httpd_close_conn( hs, connects[cnum].hc, &tv );
 	if ( connects[cnum].hc != (httpd_conn*) 0 )
 	    {
 	    httpd_destroy_conn( connects[cnum].hc );
@@ -1529,8 +1526,9 @@ shut_down( void )
     mmc_destroy();
     tmr_destroy();
     free( (void*) connects );
-    if ( throttles != (throttletab*) 0 )
+    if ( throttles != (throttletab*) 0 ) {
 	free( (void*) throttles );
+    }
 }
 
 
@@ -1860,8 +1858,9 @@ handle_send( connecttab* c, struct timeval* tvP )
 	}
 
     /* Tune the (blockheaded) wouldblock delay. */
-    if ( c->wouldblock_delay > MIN_WOULDBLOCK_DELAY )
+    if ( c->wouldblock_delay > MIN_WOULDBLOCK_DELAY ) {
 	c->wouldblock_delay -= MIN_WOULDBLOCK_DELAY;
+    }
 
     /* If we're throttling, check if we're sending too fast. */
     if ( c->max_limit != THROTTLE_NOLIMIT )
@@ -1896,7 +1895,7 @@ handle_send( connecttab* c, struct timeval* tvP )
 
 static void
 handle_linger( connecttab* c, struct timeval* tvP )
-    {
+{
     char buf[4096];
     int r;
 
@@ -1906,9 +1905,10 @@ handle_linger( connecttab* c, struct timeval* tvP )
     r = read( c->hc->conn_fd, buf, sizeof(buf) );
     if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) )
 	return;
-    if ( r <= 0 )
+    if ( r <= 0 ) {
 	really_clear_connection( c, tvP );
     }
+}
 
 
 static int
@@ -1953,12 +1953,13 @@ check_throttles( connecttab* c )
 
 static void
 clear_throttles( connecttab* c, struct timeval* tvP )
-    {
+{
     int tind;
 
-    for ( tind = 0; tind < c->numtnums; ++tind )
+    for ( tind = 0; tind < c->numtnums; ++tind ) {
 	--throttles[c->tnums[tind]].num_sending;
     }
+}
 
 
 static void
@@ -2015,13 +2016,13 @@ update_throttles( ClientData client_data, struct timeval* nowP )
 
 static void
 finish_connection( connecttab* c, struct timeval* tvP )
-    {
+{
     /* If we haven't actually sent the buffered response yet, do so now. */
     httpd_write_response( c->hc );
 
     /* And clear. */
     clear_connection( c, tvP );
-    }
+}
 
 
 static void
@@ -2082,7 +2083,7 @@ really_clear_connection( connecttab* c, struct timeval* tvP )
     stats_bytes += c->hc->bytes_sent;
     if ( c->conn_state != CNST_PAUSING )
 	fdwatch_del_fd( c->hc->conn_fd );
-    httpd_close_conn( c->hc, tvP );
+    httpd_close_conn( hs, c->hc, tvP );
     clear_throttles( c, tvP );
     if ( c->linger_timer != (Timer*) 0 )
 	{
@@ -2149,37 +2150,37 @@ wakeup_connection( ClientData client_data, struct timeval* nowP )
 
 static void
 linger_clear_connection( ClientData client_data, struct timeval* nowP )
-    {
+{
     connecttab* c;
 
     c = (connecttab*) client_data.p;
     c->linger_timer = (Timer*) 0;
     really_clear_connection( c, nowP );
-    }
+}
 
 
 static void
 occasional( ClientData client_data, struct timeval* nowP )
-    {
+{
     mmc_cleanup( nowP );
     tmr_cleanup();
     watchdog_flag = 1;		/* let the watchdog know that we are alive */
-    }
+}
 
 
 #ifdef STATS_TIME
 static void
 show_stats( ClientData client_data, struct timeval* nowP )
-    {
+{
     logstats( nowP );
-    }
+}
 #endif /* STATS_TIME */
 
 
 /* Generate debugging statistics syslog messages for all packages. */
 static void
 logstats( struct timeval* nowP )
-    {
+{
 #ifndef NO_PERIODIC_STATS
     struct timeval tv;
     time_t now;
@@ -2196,22 +2197,21 @@ logstats( struct timeval* nowP )
     if ( stats_secs == 0 )
 	stats_secs = 1;	/* fudge */
     stats_time = now;
-    syslog( LOG_INFO,
-	"up %ld seconds, stats for %ld seconds:", up_secs, stats_secs );
+    syslog( LOG_INFO, "up %ld seconds, stats for %ld seconds:", up_secs, stats_secs );
 
     thttpd_logstats( stats_secs );
     httpd_logstats( stats_secs );
     mmc_logstats( stats_secs );
     fdwatch_logstats( stats_secs );
     tmr_logstats( stats_secs );
-#endif
-    }
+#endif /* ~NO_PERIODIC_STATS */
+}
 
 
 /* Generate debugging statistics syslog message. */
 static void
 thttpd_logstats( long secs )
-    {
+{
     if ( secs > 0 )
 	syslog( LOG_INFO,
 	    "  thttpd - %ld connections (%g/sec), %d max simultaneous, %lld bytes (%g/sec), %d httpd_conns allocated",
@@ -2221,7 +2221,7 @@ thttpd_logstats( long secs )
     stats_connections = 0;
     stats_bytes = 0;
     stats_simultaneous = 0;
-    }
+}
 
 
 
