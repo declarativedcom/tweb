@@ -1,6 +1,5 @@
 /* mmc.h - header file for mmap cache package
 **
-** Copyright © 1998 by Jef Poskanzer <jef@acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without

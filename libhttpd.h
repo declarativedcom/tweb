@@ -1,6 +1,5 @@
 /* libhttpd.h - defines for libhttpd
 **
-** Copyright © 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -69,6 +68,7 @@ typedef union {
 typedef struct {
     char* binding_hostname;
     char* server_hostname;
+    char* main_name;   /* e.g. the address bound, or 'localhost' */
     unsigned short port;
     char* cgi_pattern;
     int cgi_limit, cgi_count;
@@ -84,7 +84,9 @@ typedef struct {
     int global_passwd;
     char* url_pattern;
     char* local_pattern;
+    char* main_url_robot;	/* e.g. /10.0.0.20/robots.txt */
     int no_empty_referers;
+    int log_format_type;
     } httpd_server;
 
 /* A connection. */
@@ -237,7 +239,7 @@ extern void httpd_write_response( httpd_conn* hc );
 ** parent process - the connection will stay open in the child.
 ** If you don't have a current timeval handy just pass in 0.
 */
-extern void httpd_close_conn( httpd_conn* hc, struct timeval* nowP );
+extern void httpd_close_conn( httpd_server* server, httpd_conn* hc, struct timeval* nowP );
 
 /* Call this to de-initialize a connection struct and *really* free the
 ** mallocced strings.

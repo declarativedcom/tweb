@@ -1,6 +1,6 @@
 /* fdwatch.c - fd watcher routines, either select() or poll()
 **
-** Copyright © 1999,2000 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,7 @@
 #endif /* HAVE_SYS_EVENT_H */
 
 #include "fdwatch.h"
+#include "tweb.h"
 
 #ifdef HAVE_SELECT
 #ifndef FD_SET
@@ -274,12 +275,13 @@ fdwatch_get_next_client_data( void )
 
 /* Generate debugging statistics syslog message. */
 void
-fdwatch_logstats( long secs )
+fdwatch_logstats (long secs)
     {
     if ( secs > 0 )
-	syslog(
-	    LOG_INFO, "  fdwatch - %ld %ss (%g/sec)",
-	    nwatches, WHICH, (float) nwatches / secs );
+      {
+	stats_logger( "  fdwatch - %ld %ss (%g/sec)",
+		     nwatches, WHICH, (float) nwatches / secs );
+      }
     nwatches = 0;
     }
 
@@ -388,7 +390,7 @@ kqueue_check_fd( int fd )
 	syslog( LOG_ERR, "bad ridx (%d) in kqueue_check_fd!", ridx );
 	return 0;
 	}
-    if ( ridx >= nreturned ) 
+    if ( ridx >= nreturned )
 	return 0;
     if ( kqrevents[ridx].ident != fd )
 	return 0;

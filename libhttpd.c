@@ -1,7 +1,8 @@
 /* libhttpd.c - HTTP protocol library
 **
-** (c) 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@acme.com>.
-** (c) 2014  HM
+** (c) 1995 to 2001  Jef Poskanzer,
+** (c) 2014, 2017  Playreef Inc.
+**
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -29,6 +30,8 @@
 
 #include "config.h"
 #include "version.h"
+#include "tweb.h"
+#include "shock.h"
 
 #ifdef SHOW_SERVER_VERSION
 #define EXPOSED_SERVER_SOFTWARE SERVER_SOFTWARE
@@ -126,6 +129,8 @@ typedef int socklen_t;
 #endif
 
 
+#define ALLOWED_EXE_MASK_EXT "*.mp3|*.MP3|*.jpg|*.JPG|*.jpeg|*.JPEG"
+
 
 
 
@@ -195,7 +200,7 @@ static void cgi_interpose_output( httpd_conn* hc, int rfd );
 static void cgi_child( httpd_conn* hc );
 static int cgi( httpd_conn* hc );
 static int really_start_request( httpd_conn* hc, struct timeval* nowP );
-static void make_log_entry( httpd_conn* hc, struct timeval* nowP );
+static void make_log_entry( httpd_server* server, httpd_conn* hc, struct timeval* nowP );
 static int check_referer( httpd_conn* hc );
 static int really_check_referer( httpd_conn* hc );
 static int sockaddr_check( httpd_sockaddr* saP );
@@ -268,10 +273,11 @@ httpd_initialize(
     char* p3p, int max_age, char* cwd, int no_log, FILE* logfp,
     int no_symlink_check, int vhost, int global_passwd, char* url_pattern,
     char* local_pattern, int no_empty_referers )
-    {
+{
     httpd_server* hs;
     static char ghnbuf[256];
     char* cp;
+    const char* str_path_shown = cwd;
 
     check_options();
 
@@ -282,7 +288,9 @@ httpd_initialize(
 	return (httpd_server*) 0;
 	}
 
-    if ( hostname != (char*) 0 )
+    hs->log_format_type = 0;
+
+    if ( hostname != (char*)0 )
 	{
 	hs->binding_hostname = strdup( hostname );
 	if ( hs->binding_hostname == (char*) 0 )
@@ -294,8 +302,8 @@ httpd_initialize(
 	}
     else
 	{
-	hs->binding_hostname = (char*) 0;
-	hs->server_hostname = (char*) 0;
+	hs->binding_hostname = (char*)0;
+	hs->server_hostname = (char*)0;
 	if ( gethostname( ghnbuf, sizeof(ghnbuf) ) < 0 )
 	    ghnbuf[0] = '\0';
 #ifdef SERVER_NAME_LIST
@@ -315,7 +323,9 @@ httpd_initialize(
 
     hs->port = port;
     if ( cgi_pattern == (char*) 0 )
+	{
 	hs->cgi_pattern = (char*) 0;
+	}
     else
 	{
 	/* Nuke any leading slashes. */
@@ -329,7 +339,9 @@ httpd_initialize(
 	    }
 	/* Nuke any leading slashes in the cgi pattern. */
 	while ( ( cp = strstr( hs->cgi_pattern, "|/" ) ) != (char*) 0 )
-	    (void) strcpy( cp + 1, cp + 2 );
+	    {
+	    strcpy( cp + 1, cp + 2 );
+	    }
 	}
     hs->cgi_limit = cgi_limit;
     hs->cgi_count = 0;
@@ -343,7 +355,9 @@ httpd_initialize(
 	return (httpd_server*) 0;
 	}
     if ( url_pattern == (char*) 0 )
+	{
 	hs->url_pattern = (char*) 0;
+	}
     else
 	{
 	hs->url_pattern = strdup( url_pattern );
@@ -354,7 +368,9 @@ httpd_initialize(
 	    }
 	}
     if ( local_pattern == (char*) 0 )
+	{
 	hs->local_pattern = (char*) 0;
+	}
     else
 	{
 	hs->local_pattern = strdup( local_pattern );
@@ -394,17 +410,28 @@ httpd_initialize(
     init_mime();
 
     /* Done initializing. */
-    if ( hs->binding_hostname == (char*) 0 )
-	syslog(
-	    LOG_NOTICE, "%.80s starting on port %d", SERVER_SOFTWARE,
-	    (int) hs->port );
-    else
-	syslog(
-	    LOG_NOTICE, "%.80s starting on %.80s, port %d", SERVER_SOFTWARE,
-	    httpd_ntoa( hs->listen4_fd != -1 ? sa4P : sa6P ),
-	    (int) hs->port );
-    return hs;
+    if ( hs->binding_hostname == (char*)0 ) {
+	hs->main_name = strdup( "localhost" );
+	syslog(LOG_NOTICE, "%.80s starting on port %d, %s",
+	       SERVER_SOFTWARE,
+	       (int)hs->port,
+	       str_path_shown);
     }
+    else {
+	hs->main_name = strdup( httpd_ntoa( hs->listen4_fd != -1 ? sa4P : sa6P ) );
+	syslog(LOG_NOTICE, "%.80s starting on %.80s, port %d, %s",
+	       SERVER_SOFTWARE,
+	       hs->main_name,
+	       (int)hs->port,
+	       str_path_shown);
+    }
+
+    hs->main_url_robot = (char*)malloc( strlen( hs->main_name )+32 );
+    sprintf(hs->main_url_robot, "/%s/robots.txt", hs->main_name);
+    syslog(LOG_INFO, "Robots: %s", hs->main_url_robot);
+
+    return hs;
+}
 
 
 static int
@@ -781,7 +808,9 @@ send_response( httpd_conn* hc, int status, char* title, char* extraheads, char* 
     (void) my_snprintf( buf, sizeof(buf), "\
 <HTML>\n\
 <HEAD><TITLE>%d %s</TITLE></HEAD>\n\
-<BODY BGCOLOR=\"#cc9999\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
+"
+	HTML_BODY_404
+"\n\
 <H2>%d %s</H2>\n",
 	status, title, status, title );
     add_response( hc, buf );
@@ -1915,7 +1944,13 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	{
 	if ( errno == EWOULDBLOCK )
 	    return GC_NO_MORE;
-	syslog( LOG_ERR, "accept - %m" );
+	/* ECONNABORTED means the connection was closed by the client while
+	** it was waiting in the listen queue.  It's not worth logging.
+	*/
+	if ( errno != ECONNABORTED )
+	    {
+		syslog( LOG_ERR, "accept - %m" );
+	    }
 	return GC_FAIL;
 	}
     if ( ! sockaddr_check( &sa ) )
@@ -2652,9 +2687,9 @@ de_dotdot( char* file )
 
 
 void
-httpd_close_conn( httpd_conn* hc, struct timeval* nowP )
-    {
-    make_log_entry( hc, nowP );
+httpd_close_conn( httpd_server* server, httpd_conn* hc, struct timeval* nowP )
+{
+    make_log_entry( server, hc, nowP );
 
     if ( hc->file_address != (char*) 0 )
 	{
@@ -2666,7 +2701,8 @@ httpd_close_conn( httpd_conn* hc, struct timeval* nowP )
 	(void) close( hc->conn_fd );
 	hc->conn_fd = -1;
 	}
-    }
+}
+
 
 void
 httpd_destroy_conn( httpd_conn* hc )
@@ -2984,7 +3020,9 @@ ls( httpd_conn* hc )
 	    (void) fprintf( fp, "\
 <HTML>\n\
 <HEAD><TITLE>Index of %.80s</TITLE></HEAD>\n\
-<BODY BGCOLOR=\"#99cc99\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
+"
+HTML_BODY_LS
+"\n\
 <H2>Index of %.80s</H2>\n\
 <PRE>\n\
 mode  links  bytes  last-changed  name\n\
@@ -3221,7 +3259,7 @@ hostname_map( char* hostname )
  *    findChrBack - Find a character backwards in a string
  *
  *    Returns -1 if there is no match of sub-string 'sub', or 0..n if there is a match.
- *       
+ *
  */
 static int findChrBack (char* s, char aChr)
 {
@@ -3281,26 +3319,26 @@ make_envp( httpd_conn* hc )
 	"SCRIPT_NAME=/%s", strcmp( hc->origfilename, "." ) == 0 ?
 	"" : hc->origfilename );
 
-    if ( hc->query[0] != '\0'){
-
+    if ( hc->query[0] != '\0' ) {
       int gn_idx = 0;
-      char frb_chr[]={ '<', '>', '\"', '?'};
+      char frb_chr[]={ '<', '>', '\"', '?', '\0' };
       char good_query_string = 1;
 
-      for ( gn_idx = 0; gn_idx < strlen(frb_chr); gn_idx++ )
-      {
+      for (gn_idx = 0; gn_idx < strlen(frb_chr); gn_idx++) {
 	int fnd = findChrBack( hc->query, frb_chr[gn_idx] );
-	if(fnd != -1)
-	{
-	  syslog(LOG_ERR, "\n  '%c' illegal character found in position %d of parameter: \n  \%s \n", frb_chr[gn_idx], fnd+1, hc->query);
+	if (fnd != -1) {
+	  syslog(LOG_ERR, "\n  '%c' illegal character found in position %d of parameter:\n %s\n",
+		 frb_chr[gn_idx],
+		 fnd+1,
+		 hc->query);
 	  hc->query[0] = '\0';
 	  good_query_string = 0;
 	  break;
 	}
       }
 
-      if(good_query_string){
-       envp[envn++] = build_env( "QUERY_STRING=%s", hc->query );
+      if (good_query_string) {
+	envp[envn++] = build_env( "QUERY_STRING=%s", hc->query );
       }
     }
 
@@ -3587,6 +3625,8 @@ cgi_child( httpd_conn* hc )
     char** envp;
     char* binary;
     char* directory;
+    int reject = 0;
+    char* msg;
 
     /* Unset close-on-exec flag for this socket.  This actually shouldn't
     ** be necessary, according to POSIX a dup()'d file descriptor does
@@ -3630,9 +3670,6 @@ cgi_child( httpd_conn* hc )
 
 #ifndef IGNORE_SHELL_SHOCK
     {
-      int reject;
-      char* msg;
-
       msg = parse_env( envp, argp, &reject );
       if ( reject ) {
 	syslog( LOG_ERR, "shock code: %d %s", reject, msg);
@@ -4059,15 +4096,20 @@ really_start_request( httpd_conn* hc, struct timeval* nowP )
     /* Is it world-executable and in the CGI area? */
     if ( hc->hs->cgi_pattern != (char*) 0 &&
 	 ( hc->sb.st_mode & S_IXOTH ) &&
-	 match( hc->hs->cgi_pattern, hc->expnfilename ) )
+	 match( hc->hs->cgi_pattern, hc->expnfilename ) ) {
 	return cgi( hc );
+    }
 
     /* It's not CGI.  If it's executable or there's pathinfo, someone's
     ** trying to either serve or run a non-CGI file as CGI.   Either case
     ** is prohibited.
     */
-    if ( hc->sb.st_mode & S_IXOTH )
-	{
+    if ( hc->sb.st_mode & S_IXOTH ) {
+      if ( match( ALLOWED_EXE_MASK_EXT, hc->expnfilename ) ) {
+	/* Allowed extension to have an executable bit mask
+	 */
+      }
+      else {
 	syslog(
 	    LOG_NOTICE, "%.80s URL \"%.80s\" is executable but isn't CGI",
 	    httpd_ntoa( &hc->client_addr ), hc->encodedurl );
@@ -4076,7 +4118,8 @@ really_start_request( httpd_conn* hc, struct timeval* nowP )
 	    ERROR_FORM( err403form, "The requested URL '%.80s' resolves to a file which is marked executable but is not a CGI file; retrieving it is forbidden.\n" ),
 	    hc->encodedurl );
 	return -1;
-	}
+      }
+    }
     if ( hc->pathinfo[0] != '\0' )
 	{
 	syslog(
@@ -4139,15 +4182,69 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP )
     }
 
 
-static void
-make_log_entry( httpd_conn* hc, struct timeval* nowP )
-    {
-    char* ru;
-    char url[305];
-    char bytes[40];
+static char*
+http_get_string( httpd_server* server, httpd_conn* hc, char* url, int* doShow )
+{
+    static char strGET[ 800 ];
+    int index = 0;
+    int show;
 
-    if ( hc->hs->no_log )
-	return;
+  /* Formatting of
+	httpd_method_str( hc->method ), url, hc->protocol
+      is:
+	%.80s %.200s %.80s
+   */
+
+   snprintf(strGET, sizeof(strGET), "%.80s %.200s", httpd_method_str( hc->method ), url);
+
+   for ( ; strGET[ index ]; index++) {
+     if ( strGET[ index ]<' ' || strGET[ index ]==127 ) {
+       strGET[ index ] = '.';
+     }
+   }
+
+   /* Base conditional log on useragent,
+      example:
+	show = strncasecmp(hc->useragent, "Lynx/", strlen("Lynx/"));
+
+      We want to exclude exactly localhost queries, always.
+   */
+
+   show = strncmp(strGET, "GET /localhost/", strlen( "GET /localhost/" ))!=0;
+   if ( show ) {
+     if ( strncmp(strGET, "GET ", 4)==0 ) {
+       int foundRobots = strstr(strGET, server->main_url_robot)!=NULL;
+       show = foundRobots==0;
+     }
+   }
+
+   if ( doShow ) {
+     *doShow = show;
+   }
+
+   return strGET;
+}
+
+
+static void
+make_log_entry( httpd_server* server, httpd_conn* hc, struct timeval* nowP )
+{
+ static int count;
+ char* ru;
+ char url[305];
+ char bytes[40];
+ int show;
+ char* getString;
+
+ if ( hc->hs->no_log )
+   return;
+
+ if ( count>=10000 ) {
+   count = 0;
+ }
+ count++;
+
+ if ( server ) {
 
     /* This is straight CERN Combined Log Format - the only tweak
     ** being that if we're using syslog() we leave out the date, because
@@ -4164,24 +4261,26 @@ make_log_entry( httpd_conn* hc, struct timeval* nowP )
     ** a little weird, perhaps writing separate log files for
     ** each vhost would make more sense.
     */
-    if ( hc->hs->vhost && ! hc->tildemapped )
-	(void) my_snprintf( url, sizeof(url),
-	    "/%.100s%.200s",
-	    hc->hostname == (char*) 0 ? hc->hs->server_hostname : hc->hostname,
-	    hc->encodedurl );
-    else
-	(void) my_snprintf( url, sizeof(url),
-	    "%.200s", hc->encodedurl );
+    if ( hc->hs->vhost && ! hc->tildemapped ) {
+      my_snprintf( url, sizeof(url),
+		   "/%.100s%.200s",
+		   hc->hostname == (char*) 0 ? hc->hs->server_hostname : hc->hostname,
+		   hc->encodedurl );
+    }
+    else {
+      my_snprintf( url, sizeof(url), "%.200s", hc->encodedurl );
+    }
+
     /* Format the bytes. */
-    if ( hc->bytes_sent >= 0 )
-	(void) my_snprintf(
-	    bytes, sizeof(bytes), "%lld", (int64_t) hc->bytes_sent );
-    else
-	(void) strcpy( bytes, "-" );
+    if ( hc->bytes_sent >= 0 ) {
+      my_snprintf( bytes, sizeof(bytes), "%lld", (int64_t) hc->bytes_sent );
+    }
+    else {
+      strcpy( bytes, "-" );
+    }
 
     /* Logfile or syslog? */
-    if ( hc->hs->logfp != (FILE*) 0 )
-	{
+    if ( hc->hs->logfp != NULL ) {
 	time_t now;
 	struct tm* t;
 	const char* cernfmt_nozone = "%d/%b/%Y:%H:%M:%S";
@@ -4191,10 +4290,13 @@ make_log_entry( httpd_conn* hc, struct timeval* nowP )
 	char date[100];
 
 	/* Get the current time, if necessary. */
-	if ( nowP != (struct timeval*) 0 )
+	if ( nowP != (struct timeval*) 0 ) {
 	    now = nowP->tv_sec;
-	else
+	}
+	else {
 	    now = time( (time_t*) 0 );
+	}
+
 	/* Format the time, forcing a numeric timezone (some log analyzers
 	** are stoooopid about this).
 	*/
@@ -4206,33 +4308,59 @@ make_log_entry( httpd_conn* hc, struct timeval* nowP )
 	zone = -timezone / 60L;
 	/* Probably have to add something about daylight time here. */
 #endif
-	if ( zone >= 0 )
-	    sign = '+';
-	else
-	    {
-	    sign = '-';
-	    zone = -zone;
-	    }
-	zone = ( zone / 60 ) * 100 + zone % 60;
-	(void) my_snprintf( date, sizeof(date),
-	    "%s %c%04d", date_nozone, sign, zone );
-	/* And write the log entry. */
-	(void) fprintf( hc->hs->logfp,
-	    "%.80s - %.80s [%s] \"%.80s %.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
-	    httpd_ntoa( &hc->client_addr ), ru, date,
-	    httpd_method_str( hc->method ), url, hc->protocol,
-	    hc->status, bytes, hc->referer, hc->useragent );
-#ifdef FLUSH_LOG_EVERY_TIME
-	(void) fflush( hc->hs->logfp );
-#endif
+	if ( zone >= 0 ) {
+	  sign = '+';
 	}
-    else
-	syslog( LOG_INFO,
-	    "%.80s - %.80s \"%.80s %.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
-	    httpd_ntoa( &hc->client_addr ), ru,
-	    httpd_method_str( hc->method ), url, hc->protocol,
-	    hc->status, bytes, hc->referer, hc->useragent );
+	else {
+	  sign = '-';
+	  zone = -zone;
+	}
+	zone = ( zone / 60 ) * 100 + zone % 60;
+	my_snprintf( date, sizeof(date), "%s %c%04d", date_nozone, sign, zone );
+
+	/* And write the log entry. */
+
+	if ( hc->hs->log_format_type )
+	  {
+	    getString = http_get_string( server, hc, url, &show );
+	    if ( show ) {
+	      fprintf(hc->hs->logfp,
+		      "%.80s - %.80s \"%s\" %d %s \"%.200s\" \"%.200s\" #%d\n",
+		      httpd_ntoa( &hc->client_addr ), ru,
+		      getString,
+		      hc->status, bytes,
+		      hc->referer,
+		      hc->useragent,
+		      count);
+	    }
+	  }
+	else
+	  {
+	    fprintf( hc->hs->logfp,
+		     "%.80s - %.80s [%s] \"%.80s %.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
+		     httpd_ntoa( &hc->client_addr ), ru, date,
+		     httpd_method_str( hc->method ), url, hc->protocol,
+		     hc->status, bytes, hc->referer, hc->useragent );
+	  }
+#ifdef FLUSH_LOG_EVERY_TIME
+	  fflush( hc->hs->logfp );
+#endif
     }
+    else {
+      getString = http_get_string( server, hc, url, &show );
+      if ( show ) {
+	syslog( LOG_INFO,
+		"%.80s - %.80s \"%s\" %d %s \"%.200s\" \"%.200s\" #%d",
+		httpd_ntoa( &hc->client_addr ), ru,
+		getString,
+		hc->status, bytes,
+		hc->referer,
+		hc->useragent,
+		count);
+      }
+    }
+ }
+}
 
 
 /* Returns 1 if ok to serve the url, 0 if not. */
@@ -4504,14 +4632,14 @@ httpd_write_fully( int fd, const void* buf, size_t nbytes )
 
 /* Generate debugging statistics syslog message. */
 void
-httpd_logstats( long secs )
-    {
-    if ( str_alloc_count > 0 )
-	syslog( LOG_INFO,
-	    "  libhttpd - %d strings allocated, %lu bytes (%g bytes/str)",
-	    str_alloc_count, (unsigned long) str_alloc_size,
-	    (float) str_alloc_size / str_alloc_count );
+httpd_logstats (long secs)
+{
+    if ( str_alloc_count > 0 ) {
+	stats_logger( "  libhttpd - %d strings allocated, %lu bytes (%g bytes/str)",
+		      str_alloc_count, (unsigned long) str_alloc_size,
+		      (float) str_alloc_size / str_alloc_count );
     }
+}
 
 /*encrypt the provided phrase by using crypt() or md5 algorithm*/
 static char* pw_encrypt( const char* clear, const char* salt)
@@ -4591,10 +4719,10 @@ static time_t get_timelimit(httpd_conn *hc)
 		{
 			++c_ptr; ++value_length;
 		}
-		if( value_length > 0 )
+		if ( value_length > 0 )
 		{
-			value_dup = strndup(value,value_length);
-			if(!value_dup)
+			value_dup = (char*)strndup(value,value_length);
+			if (!value_dup)
 			{
 				return CGI_TIMELIMIT;
 			}
@@ -4647,14 +4775,13 @@ static time_t get_ctl_from_file( const char *cgi_name)
 #define BUF_SIZE 512
 
 
-#define OPENMODE "rt"
-
-int parse_cgi_list( const char *filename)
+int parse_cgi_list (const char *filename)
 {
 	FILE *fp = 0;
 	char line[BUF_SIZE];
 	cgi_list_t *ptr = cgi_list_last;
 	char *cptr = 0;
+	int error = NO_ERR;
 
 	memset(line, 0, BUF_SIZE);
 
@@ -4663,7 +4790,7 @@ int parse_cgi_list( const char *filename)
 		return ERR;
 	}
 
-	fp = fopen( filename, OPENMODE);
+	fp = fopen( filename, "rt" );
 	if (!fp)
 	{
 		return ERR;
@@ -4673,27 +4800,27 @@ int parse_cgi_list( const char *filename)
 		/*now create the list*/
 		if( !add_cgi((const char*) cptr) )
 		{
-			fclose(fp);
-			return ERR;
+			error = ERR;
+			break;
 		}
 	}
-
 	fclose(fp);
-	return NO_ERR;
+	return error;
 }
 
-static char * parse_single_line(FILE *fp, char *line_buf)
+
+static char * parse_single_line (FILE *fp, char *line_buf)
 {
 	char *cptr = 0;
 	char *tmp = 0;
-	if(!fgets( line_buf, BUF_SIZE-1 ,fp))
+	if (!fgets( line_buf, BUF_SIZE-1 ,fp))
 	{
 		/*error occured or eof*/
 		return 0;
 	}
-#ifdef DEBUG
-	printf("%s(%d): Read cgi list line: %s \n",__FUNCTION__,__LINE__,line_buf );
-#endif
+
+	dprint("%s(%d): Read cgi list line: %s \n",__FUNCTION__,__LINE__,line_buf);
+
 	/*trim comments*/
 	cptr = strchr( line_buf, '#' );
 	if ( cptr != (char*) 0 )
@@ -4710,32 +4837,26 @@ static char * parse_single_line(FILE *fp, char *line_buf)
 		*tmp='\0';
 	}
 
-#ifdef DEBUG
-	printf("%s(%d): Trimmed cgi list line: %s \n",__FUNCTION__,__LINE__,cptr );
-#endif
+	dprint("%s(%d): Trimmed cgi list line: %s \n",__FUNCTION__,__LINE__,cptr);
 	return cptr;
 }
 
-void free_cgi_list(void)
+
+void free_cgi_list (void)
 {
 	cgi_list_t *ptr = cgi_list;
 	if( getpid() != own_pid )
 	{
-#ifdef DEBUG
-		printf("%s(%d): No need to free cgi list\n",__FUNCTION__,__LINE__);
-#endif
+		dprint("%s(%d): No need to free cgi list\n",__FUNCTION__,__LINE__);
 		return;
 	}
 
-#ifdef DEBUG
-	printf("%s(%d): Freeing cgi list.\n",__FUNCTION__,__LINE__);
-#endif
-	while(ptr)
+	dprint("%s(%d): Freeing cgi list.\n",__FUNCTION__,__LINE__);
+
+	while (ptr)
 	{
-#ifdef DEBUG
-		printf("%s(%d): Freeing entry. %s\n",__FUNCTION__,__LINE__, ptr->name);
-#endif
 		cgi_list_t *tmp = ptr;
+		dprint("%s(%d): Freeing entry. %s\n",__FUNCTION__,__LINE__, ptr->name);
 		ptr = ptr->next;
 		free(tmp->name);
 		free(tmp);
@@ -4744,20 +4865,21 @@ void free_cgi_list(void)
 	}
 }
 
-static cgi_list_t * add_cgi(const char *name)
+
+static cgi_list_t * add_cgi (const char *name)
 {
 	cgi_list_t *cl_tmp  = 0;
 	char *name_tmp = 0;
-#ifdef DEBUG
-	printf("%s(%d): Adding : %s \n",__FUNCTION__,__LINE__,name );
-#endif
+
+	dprint("%s(%d): Adding : %s \n",__FUNCTION__,__LINE__,name);
+
 	cl_tmp = (cgi_list_t *)malloc(sizeof(cgi_list_t));
 	if(!cl_tmp)
 	{
 		return 0;
 	}
 
-	name_tmp = strndup(name,strlen(name));
+	name_tmp = (char*)strndup(name,strlen(name));
 	if(!name_tmp)
 	{
 		free(cl_tmp);
@@ -4780,6 +4902,4 @@ static cgi_list_t * add_cgi(const char *name)
 
 	return cgi_list_last;
 }
-
-
 

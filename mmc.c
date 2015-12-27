@@ -1,6 +1,6 @@
 /* mmc.c - mmap cache
 **
-** Copyright © 1998,2001 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -26,6 +26,7 @@
 */
 
 #include "config.h"
+#include "tweb.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -520,12 +521,13 @@ hash( ino_t ino, dev_t dev, off_t size, time_t ctime )
 
 /* Generate debugging statistics syslog message. */
 void
-mmc_logstats( long secs )
+mmc_logstats (long secs)
     {
-    syslog(
-	LOG_INFO, "  map cache - %d allocated, %d active (%lld bytes), %d free; hash size: %d; expire age: %ld",
-	alloc_count, map_count, (int64_t) mapped_bytes, free_count, hash_size,
-	expire_age );
+    stats_logger( "  map cache - %d allocated, %d active (%lld bytes), %d free; hash size: %d; expire age: %ld",
+		  alloc_count, map_count, (int64_t) mapped_bytes, free_count, hash_size,
+		  expire_age );
     if ( map_count + free_count != alloc_count )
+      {
 	syslog( LOG_ERR, "map counts don't add up!" );
+      }
     }

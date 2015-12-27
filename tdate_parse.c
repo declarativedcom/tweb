@@ -1,6 +1,6 @@
 /* tdate_parse - parse string dates into internal form, stripped-down version
 **
-** Copyright © 1995 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without

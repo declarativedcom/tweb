@@ -1,6 +1,6 @@
 /* timers.c - simple timer routines
 **
-** Copyright © 1995,1998,2000 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,7 @@
 #include <syslog.h>
 
 #include "timers.h"
+#include "tweb.h"
 
 
 #define HASH_SIZE 67
@@ -341,11 +342,12 @@ tmr_destroy( void )
 
 /* Generate debugging statistics syslog message. */
 void
-tmr_logstats( long secs )
+tmr_logstats (long secs)
     {
-    syslog(
-	LOG_INFO, "  timers - %d allocated, %d active, %d free",
-	alloc_count, active_count, free_count );
+    stats_logger( "  timers - %d allocated, %d active, %d free",
+		  alloc_count, active_count, free_count );
     if ( active_count + free_count != alloc_count )
+      {
 	syslog( LOG_ERR, "timer counts don't add up!" );
+      }
     }
