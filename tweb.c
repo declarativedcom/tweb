@@ -1,6 +1,6 @@
 /* tweb.c
 **
-** (c)2014  Playreef Inc.
+** (c)2015  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -27,6 +27,7 @@
 
 
 #include "config.h"
+#include "tweb.h"
 #include "version.h"
 
 #include <sys/param.h>
@@ -77,6 +78,7 @@ typedef long long int64_t;
 static char* argv0;
 static int debug;
 static unsigned short port;
+static int do_history_logs;  /* NEW! Show statistics regularly */
 static char* dir;
 static char* data_dir;
 static int do_chroot, no_log, no_symlink_check, do_vhost, do_global_passwd;
@@ -96,6 +98,10 @@ static int max_age;
 static int lockout_active = LOCKOUT_INACTIVE;
 
 static time_t dyn_cgi_tl; /*initialized at parse_args()*/
+
+
+#define SHOW_SW_VERSION		printf( SERVER_SOFTWARE " " SERVER_SW_BUILD "\n" )
+
 
 typedef struct {
     char* pattern;
@@ -366,7 +372,7 @@ main( int argc, char** argv )
     struct passwd* pwd;
     uid_t uid = 32767;
     gid_t gid = 32767;
-    char cwd[MAXPATHLEN+1];
+    char cwd[ MAXPATHLEN+1 ];
     FILE* logfp;
     int num_ready;
     int cnum;
@@ -380,24 +386,33 @@ main( int argc, char** argv )
     argv0 = argv[0];
 
     cp = strrchr( argv0, '/' );
-    if ( cp != (char*) 0 )
+    if ( cp != (char*) 0 ) {
 	++cp;
-    else
+    }
+    else {
 	cp = argv0;
+    }
+
+    if ( argv[1] && strcmp( argv[1], "--version" )==0 ) {
+      SHOW_SW_VERSION;
+      return 0;
+    }
+
     openlog( cp, LOG_NDELAY|LOG_PID, LOG_FACILITY );
-	/*init lockout*/
-	if(libInit() != RET_OK)
-	{
-		syslog(LOG_CRIT, "Could not initialize lockout lib");
-		exit(1);
-	}
-	lockout_active = LOCKOUT_ACTIVE;
-	own_pid = getpid();
-	atexit(lockout_close);
+
+    /*init lockout*/
+    if (libInit() != RET_OK) {
+      syslog(LOG_CRIT, "Could not initialize lockout lib");
+      exit(1);
+    }
+    lockout_active = LOCKOUT_ACTIVE;
+    own_pid = getpid();
+    atexit(lockout_close);
+
     /* Handle command-line arguments. */
     parse_args( argc, argv );
 
-		/*atexit(free_cgi_list);*/
+    /*atexit(free_cgi_list);*/
     /* Read zone info now, in case we chroot(). */
     tzset();
 
@@ -414,8 +429,9 @@ main( int argc, char** argv )
     numthrottles = 0;
     maxthrottles = 0;
     throttles = (throttletab*) 0;
-    if ( throttlefile != (char*) 0 )
+    if ( throttlefile != (char*) 0 ) {
 	read_throttlefile( throttlefile );
+    }
 
     /* If we're root and we're going to become another user, get the uid/gid
     ** now.
@@ -434,7 +450,7 @@ main( int argc, char** argv )
 	}
 
     /* Log file. */
-    if ( logfile != (char*) 0 )
+    if ( logfile != (char*)0 )
 	{
 	if ( strcmp( logfile, "/dev/null" ) == 0 )
 	    {
@@ -472,7 +488,9 @@ main( int argc, char** argv )
 	    }
 	}
     else
+      {
 	logfp = (FILE*) 0;
+      }
 
     /* Switch directories if requested. */
     if ( dir != (char*) 0 )
@@ -548,7 +566,7 @@ main( int argc, char** argv )
 #endif /* HAVE_SETSID */
 	}
 
-    if ( pidfile != (char*) 0 )
+    if ( pidfile != (char*)0 )
 	{
 	/* Write the PID file. */
 	FILE* pidfp = fopen( pidfile, "w" );
@@ -699,8 +717,7 @@ main( int argc, char** argv )
     stats_simultaneous = 0;
 
     /* If we're root, try to become someone else. */
-    if ( getuid() == 0 )
-	{
+    if ( getuid() == 0 ) {
 	/* Set aux groups to null. */
 	if ( setgroups( 0, (const gid_t*) 0 ) < 0 )
 	    {
@@ -727,9 +744,15 @@ main( int argc, char** argv )
 	    exit( 1 );
 	    }
 	/* Check for unnecessary security exposure. */
-	if ( ! do_chroot )
+	if ( ! do_chroot ) {
 	    syslog(LOG_WARNING, "started as root without requesting chroot(), warning only" );
 	}
+    }
+
+    /* A few information more */
+    if ( debug > 0 || do_history_logs != 0 ) {
+	syslog(LOG_INFO, "CGI pattern: %s", cgi_pattern ? cgi_pattern : "''");
+    }
 
     /* Initialize our connections table. */
     connects = NEW( connecttab, max_connects );
@@ -897,14 +920,14 @@ parse_args( int argc, char** argv )
     p3p = "";
     max_age = -1;
 
-		dyn_cgi_tl = 0;
+    dyn_cgi_tl = 0;
 
     argn = 1;
     while ( argn < argc && argv[argn][0] == '-' )
 	{
 	if ( strcmp( argv[argn], "-V" ) == 0 )
 	    {
-	    printf( SERVER_SOFTWARE " " SERVER_SW_BUILD "\n" );
+	    SHOW_SW_VERSION;
 	    exit( 0 );
 	    }
 	else if ( strcmp( argv[argn], "-C" ) == 0 && argn + 1 < argc )
@@ -914,8 +937,13 @@ parse_args( int argc, char** argv )
 	    }
 	else if ( strcmp( argv[argn], "-p" ) == 0 && argn + 1 < argc )
 	    {
-	    ++argn;
-	    port = (unsigned short) atoi( argv[argn] );
+	    int number = atoi( argv[++argn] );
+	    port = (unsigned short)number;
+	    if ( (port<=0 && argv[argn][0]!='0') || (int)port!=number )
+	      {
+		/* port must be an unsigned 16bit value (0 to 65535) */
+		usage();
+	      }
 	    }
 	else if ( strcmp( argv[argn], "-d" ) == 0 && argn + 1 < argc )
 	    {
@@ -931,6 +959,10 @@ parse_args( int argc, char** argv )
 	    {
 	    do_chroot = 0;
 	    no_symlink_check = 0;
+	    }
+	else if ( strcmp( argv[argn], "-H" ) == 0 )
+	    {
+	    do_history_logs = 1;
 	    }
 	else if ( strcmp( argv[argn], "-dd" ) == 0 && argn + 1 < argc )
 	    {
@@ -994,8 +1026,9 @@ parse_args( int argc, char** argv )
 	    ++argn;
 	    max_age = atoi( argv[argn] );
 	    }
-	else if ( strcmp( argv[argn], "-D" ) == 0 )
+	else if ( strcmp( argv[argn], "-D" ) == 0 ) {
 	    debug = 1;
+	}
 	else if ( strcmp( argv[argn], "-ctl" ) == 0 )
 	{
 		++argn;
@@ -1006,15 +1039,15 @@ parse_args( int argc, char** argv )
 		++argn;
 		(void) parse_cgi_list(argv[argn]);
 	}
-	else
+	else {
 	    usage();
+	}
 	++argn;
 	}
-    if ( argn != argc )
-		{
-	usage();
-		}
-	set_dyn_cgi_timelimit(dyn_cgi_tl);
+    if ( argn != argc ) {
+      usage();
+    }
+    set_dyn_cgi_timelimit(dyn_cgi_tl);
     }
 
 
@@ -2181,7 +2214,6 @@ show_stats( ClientData client_data, struct timeval* nowP )
 static void
 logstats( struct timeval* nowP )
 {
-#ifndef NO_PERIODIC_STATS
     struct timeval tv;
     time_t now;
     long up_secs, stats_secs;
@@ -2195,32 +2227,35 @@ logstats( struct timeval* nowP )
     up_secs = now - start_time;
     stats_secs = now - stats_time;
     if ( stats_secs == 0 )
+	{
 	stats_secs = 1;	/* fudge */
+	}
     stats_time = now;
-    syslog( LOG_INFO, "up %ld seconds, stats for %ld seconds:", up_secs, stats_secs );
 
-    thttpd_logstats( stats_secs );
-    httpd_logstats( stats_secs );
-    mmc_logstats( stats_secs );
-    fdwatch_logstats( stats_secs );
-    tmr_logstats( stats_secs );
-#endif /* ~NO_PERIODIC_STATS */
+    if ( do_history_logs > 0 ) {
+	syslog( LOG_INFO, "up %ld seconds, stats for %ld seconds:", up_secs, stats_secs );
+	thttpd_logstats( stats_secs );
+	httpd_logstats( stats_secs );
+	mmc_logstats( stats_secs );
+	fdwatch_logstats( stats_secs );
+	tmr_logstats( stats_secs );
+    }
+    stats_connections = 0;
+    stats_bytes = 0;
+    stats_simultaneous = 0;
 }
 
 
 /* Generate debugging statistics syslog message. */
 static void
-thttpd_logstats( long secs )
+thttpd_logstats (long secs)
 {
-    if ( secs > 0 )
-	syslog( LOG_INFO,
-	    "  thttpd - %ld connections (%g/sec), %d max simultaneous, %lld bytes (%g/sec), %d httpd_conns allocated",
+    if ( secs > 0 ) {
+	stats_logger( "  thttpd - %ld connections (%g/sec), %d max simultaneous, %lld bytes (%g/sec), %d httpd_conns allocated",
 	    stats_connections, (float) stats_connections / secs,
 	    stats_simultaneous, (int64_t) stats_bytes,
 	    (float) stats_bytes / secs, httpd_conn_count );
-    stats_connections = 0;
-    stats_bytes = 0;
-    stats_simultaneous = 0;
+    }
 }
 
 
@@ -2228,11 +2263,11 @@ thttpd_logstats( long secs )
 
 static void lockout_close(void)
 {
-	if(own_pid != getpid() )
+	if (own_pid != getpid() )
 	{
 		return;
 	}
-	if(lockout_active == LOCKOUT_ACTIVE )
+	if (lockout_active == LOCKOUT_ACTIVE )
 	{
 		if( libDestroy() != RET_OK )
 		{
