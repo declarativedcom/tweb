@@ -1,6 +1,6 @@
 /* tweb.c
 **
-** (c)2015  Playreef Inc.
+** (c)2015, 2017  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -95,6 +95,7 @@ static char* user;
 static char* charset;
 static char* p3p;
 static int max_age;
+static int new_log_format;
 static int lockout_active = LOCKOUT_INACTIVE;
 
 static time_t dyn_cgi_tl; /*initialized at parse_args()*/
@@ -366,7 +367,7 @@ re_open_logfile( void )
 
 
 int
-main( int argc, char** argv )
+main (int argc, char** argv)
     {
     char* cp;
     struct passwd* pwd;
@@ -682,6 +683,11 @@ main( int argc, char** argv )
 	exit( 1 );
     }
 
+    /* new log format, '-f' option:
+       I do not recall exactly what was my idea...
+    */
+    hs->log_format_type = new_log_format;
+
     /* Set up the occasional timer. */
     if ( tmr_create( (struct timeval*) 0, occasional, JunkClientData, OCCASIONAL_TIME * 1000L, 1 ) == (Timer*) 0 )
 	{
@@ -970,9 +976,13 @@ parse_args( int argc, char** argv )
 	    data_dir = argv[argn];
 	    }
 	else if ( strcmp( argv[argn], "-s" ) == 0 )
+	  {
 	    no_symlink_check = 0;
+	  }
 	else if ( strcmp( argv[argn], "-nos" ) == 0 )
+	  {
 	    no_symlink_check = 1;
+	  }
 	else if ( strcmp( argv[argn], "-u" ) == 0 && argn + 1 < argc )
 	    {
 	    ++argn;
@@ -999,49 +1009,63 @@ parse_args( int argc, char** argv )
 	    logfile = argv[argn];
 	    }
 	else if ( strcmp( argv[argn], "-v" ) == 0 )
+	  {
 	    do_vhost = 1;
+	  }
 	else if ( strcmp( argv[argn], "-nov" ) == 0 )
+	  {
 	    do_vhost = 0;
+	  }
 	else if ( strcmp( argv[argn], "-g" ) == 0 )
+	  {
 	    do_global_passwd = 1;
+	  }
 	else if ( strcmp( argv[argn], "-nog" ) == 0 )
+	  {
 	    do_global_passwd = 0;
+	  }
 	else if ( strcmp( argv[argn], "-i" ) == 0 && argn + 1 < argc )
-	    {
+	  {
 	    ++argn;
 	    pidfile = argv[argn];
-	    }
+	  }
 	else if ( strcmp( argv[argn], "-T" ) == 0 && argn + 1 < argc )
-	    {
+	  {
 	    ++argn;
 	    charset = argv[argn];
-	    }
+	  }
 	else if ( strcmp( argv[argn], "-P" ) == 0 && argn + 1 < argc )
-	    {
+	  {
 	    ++argn;
 	    p3p = argv[argn];
-	    }
+	  }
 	else if ( strcmp( argv[argn], "-M" ) == 0 && argn + 1 < argc )
-	    {
+	  {
 	    ++argn;
 	    max_age = atoi( argv[argn] );
-	    }
-	else if ( strcmp( argv[argn], "-D" ) == 0 ) {
+	  }
+	else if ( strcmp( argv[argn], "-f" ) == 0 )
+	  {
+	    new_log_format = 1;
+	  }
+	else if ( strcmp( argv[argn], "-D" ) == 0 )
+	  {
 	    debug = 1;
-	}
+	  }
 	else if ( strcmp( argv[argn], "-ctl" ) == 0 )
-	{
-		++argn;
-		dyn_cgi_tl = (time_t) atol(argv[argn]);
+	  {
+	    ++argn;
+	    dyn_cgi_tl = (time_t) atol(argv[argn]);
 	}
 	else if ( strcmp( argv[argn], "-clf" ) == 0 )
-	{
-		++argn;
-		(void) parse_cgi_list(argv[argn]);
-	}
-	else {
+	  {
+	    ++argn;
+	    (void) parse_cgi_list(argv[argn]);
+	  }
+	else
+	  {
 	    usage();
-	}
+	  }
 	++argn;
 	}
     if ( argn != argc ) {
@@ -1054,7 +1078,7 @@ parse_args( int argc, char** argv )
 static void
 usage( void )
     {
-    printf("usage:  %s [-C configfile] [-p port] [-d dir] [-r|-nor] [-dd data_dir] [-s|-nos] [-v|-nov] [-g|-nog] [-u user] [-c cgipat] [-t throttles] [-h host] [-l logfile] [-i pidfile] [-T charset] [-P P3P] [-M maxage] [-V] [-D]\n", argv0 );
+    printf("usage:  %s [-C configfile] [-p port] [-d dir] [-r|-nor] [-dd data_dir] [-s|-nos] [-v|-nov] [-g|-nog] [-u user] [-c cgipat] [-t throttles] [-h host] [-l logfile] [-i pidfile] [-T charset] [-P P3P] [-M maxage] [-f] [-V] [-D]\n", argv0 );
     exit( 0 );
     }
 
