@@ -13,10 +13,10 @@ CLEANFILES=$(OBJS) $(LIBRARY)
 	$(CC) $(CFLAGS) -c $*.c
 
 $(LIBRARY): $(OBJS)
-	$(AR) cr $(LIBRARY) $?  
+	$(AR) cr $(LIBRARY) $?
 	$(RANLIB) $@
 
 clean:
 	rm -f $(CLEANFILES)
 
- 
+

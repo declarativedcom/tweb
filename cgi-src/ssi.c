@@ -1,6 +1,6 @@
 /* ssi - server-side-includes CGI program
 **
-** Copyright © 1995 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -549,7 +549,7 @@ parse( char* vfilename, char* filename, FILE* fp, char* str )
 	if ( ntags < sizeof(tags)/sizeof(*tags) )
 	    tags[ntags++] = cp;
 	}
-    
+
     if ( strcmp( directive, "config" ) == 0 )
 	dirn = DI_CONFIG;
     else if ( strcmp( directive, "include" ) == 0 )

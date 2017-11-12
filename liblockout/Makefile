@@ -1,6 +1,6 @@
 CFLAGS=-Wall -Werror -O0 -g
-#-pedantic -ansi 
-# those flags cause warning about ftruncate -> 
+#-pedantic -ansi
+# those flags cause warning about ftruncate ->
 # ftruncate is posix compilant and not neccessarily ansi
 LIBRARY=liblockout.a
 OBJS=liblockout.o

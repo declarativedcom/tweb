@@ -1,6 +1,6 @@
 /* redirect - simple redirection CGI program
 **
-** Copyright © 1995 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -120,7 +120,7 @@ The requested filename, %s, has moved to a new URL:\n\
 <A HREF=\"%s\">%s</A>.\n\
 </BODY></HTML>\n", url, title, title, script_name, url, url );
     }
-	
+
 
 int
 main( int argc, char** argv )

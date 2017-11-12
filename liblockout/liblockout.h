@@ -17,14 +17,14 @@ typedef struct {
 typedef struct{
 	lockout_hdr hdr;
 	char *username;
-}lockout_str;
+} lockout_str;
 
 
 /* Enum for representing return value */
 typedef enum {
 	RET_OK = 0,
 	RET_FAIL
-}RetVal;
+} RetVal;
 
 /*Store one entry into the lockout file*/
 RetVal storeData( lockout_str *ptr);

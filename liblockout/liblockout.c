@@ -31,7 +31,8 @@
 #define SEM_RELEASE_OP 1
 #endif
 
-#define LOCKOUT_FILE "/tmp/lockout.dat"
+#define LOCKOUT_FILE_DEF_STR "/tmp/lockout.dat"
+#define liblockout_filename() libLock_lockout( "LOCKOUT_FILE" )
 #define PERM_FLAGS S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH
 #define SEM_INIT_VAL 1
 
@@ -113,10 +114,26 @@ int lockout_sem = -1;
 int lockout_fd = 0;
 
 
-/* =============================static functions*/
+/* =============================static functions */
 
 #define PRINT_BUFFER_SIZE 512
 
+
+static const char* libLock_lockout (const char* strEnvVar)
+{
+	char* strName = LOCKOUT_FILE_DEF_STR;
+	const char* strAlt = NULL;
+	if ( strEnvVar && strEnvVar[ 0 ] ) {
+	  strAlt = getenv( strEnvVar );  /* env var LOCKOUT_FILE exists? */
+	  if ( strAlt && strAlt[ 0 ] ) {
+	    strName = strdup( strAlt );
+	  }
+	}
+	return strName;
+}
+
+#define LOCKOUT_FILE_DEF_STR "/tmp/lockout.dat"
+#define liblockout_filename() libLock_lockout( "LOCKOUT_FILE" )
 
 static void __print_perror(const char *func, int line, const char *string)
 {
@@ -128,7 +145,7 @@ static void __print_perror(const char *func, int line, const char *string)
 
 	{ /* {}  to limit the variable scope*/
 		char buffer[PRINT_BUFFER_SIZE];
-		(void)sprintf(buffer,"liblockout::%s::%d::%s",func,line,string);
+		sprintf(buffer,"liblockout::%s::%d::%s",func,line,string);
 		perror(buffer);
 	}
 
@@ -406,6 +423,7 @@ RetVal delData( lockout_str *ptr)
 
 RetVal libInit(void)
 {
+	const char* strLockoutFilename = NULL;
 #ifdef HAVE_POSIX_SEM
 	sem_t *sem = (sem_t*)0;
 	sem = sem_open( SEM_NAME, O_CREAT , PERM_FLAGS , SEM_INIT_VAL);
@@ -460,13 +478,15 @@ RetVal libInit(void)
 		return RET_FAIL;
 	}
 #endif
-	lockout_fd = open( LOCKOUT_FILE, O_RDWR|O_CREAT|O_NONBLOCK, PERM_FLAGS ); /*non block can be safely used here as /tmp resides in ram */
+	strLockoutFilename = liblockout_filename();
+	lockout_fd = open( strLockoutFilename, O_RDWR|O_CREAT|O_NONBLOCK, PERM_FLAGS ); /*non block can be safely used here as /tmp resides in ram */
 	if ( lockout_fd < 0 )
 	{
-		PERROR("open()");
+		PERROR( strLockoutFilename );  /* or ... "open()" */
 #ifdef HAVE_POSIX_SEM
 		/*TODO: do sem_close() here ... */
 #endif
+		fprintf(stderr, "Hint:\nDefine LOCKOUT_FILE as /tmp/username.dat\n");
 		return RET_FAIL;
 	}
 	return RET_OK;

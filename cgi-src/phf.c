@@ -8,7 +8,7 @@
 ** and then returns a page indicating that phf doesn't exist.
 **
 **
-** Copyright © 1996 by Jef Poskanzer <jef@acme.com>.
+** (c)2014  Playreef Inc.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
