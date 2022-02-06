@@ -1,6 +1,7 @@
 /* libhttpd.c - HTTP protocol library
 **
-** Copyright � 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@acme.com>.
+** (c) 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@acme.com>.
+** (c) 2014  HM
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -3626,6 +3627,18 @@ cgi_child( httpd_conn* hc )
 
     /* Make the argument vector. */
     argp = make_argp( hc );
+
+#ifndef IGNORE_SHELL_SHOCK
+    {
+      int reject;
+      char* msg;
+
+      msg = parse_env( envp, argp, &reject );
+      if ( reject ) {
+	syslog( LOG_ERR, "shock code: %d %s", reject, msg);
+      }
+    }
+#endif
 
     /* Set up stdin.  For POSTs we may have to set up a pipe from an
     ** interposer process, depending on if we've read some of the data

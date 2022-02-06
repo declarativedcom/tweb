@@ -2,6 +2,7 @@
 # Makefile.in for thttpd
 #
 # Copyright © 1995,1998 by Jef Poskanzer <jef@acme.com>.
+# (c) 2014  HM
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -66,7 +67,7 @@ INSTALL =	/usr/bin/install -c
 	@rm -f $@
 	$(CC) $(CFLAGS) -c $*.c
 
-SRC =		thttpd.c libhttpd.c fdwatch.c mmc.c timers.c match.c tdate_parse.c
+SRC =		thttpd.c libhttpd.c fdwatch.c mmc.c timers.c match.c tdate_parse.c shock.c
 
 OBJ =		$(SRC:.c=.o) 
 
